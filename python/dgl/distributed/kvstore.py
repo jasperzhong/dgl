@@ -914,14 +914,14 @@ class KVServer(object):
             dlpack = shared_data.to_dlpack()
             self._data_store[name] = F.zerocopy_from_dlpack(dlpack)
             rpc.copy_data_to_shared_memory(self._data_store[name], data_tensor)
-            # assert (
-            #     self._part_policy[name].get_part_size() == data_tensor.shape[0]
-            # ), "kvserver expect partition {} for {} has {} rows, but gets {} rows".format(
-            #     self._part_policy[name].part_id,
-            #     policy_str,
-            #     self._part_policy[name].get_part_size(),
-            #     data_tensor.shape[0],
-            # )
+            assert (
+                self._part_policy[name].get_part_size() == data_tensor.shape[0]
+            ), "kvserver expect partition {} for {} has {} rows, but gets {} rows".format(
+                self._part_policy[name].part_id,
+                policy_str,
+                self._part_policy[name].get_part_size(),
+                data_tensor.shape[0],
+            )
         self._pull_handlers[name] = default_pull_handler
         self._push_handlers[name] = default_push_handler
 
@@ -1182,65 +1182,68 @@ class KVClient(object):
         # The servers may handle the duplicated initializations.
         part_shape = shape.copy()
         part_shape[0] = part_policy.get_part_size()
-        request = InitDataRequest(
-            name,
-            tuple(part_shape),
-            F.reverse_data_type_dict[dtype],
-            part_policy.policy_str,
-            init_func,
-        )
-        # The request is sent to the servers in one group, which are on the same machine.
-        for n in range(self._group_count):
-            server_id = part_policy.part_id * self._group_count + n
-            rpc.send_request(server_id, request)
-        for _ in range(self._group_count):
-            response = rpc.recv_response()
-            assert response.msg == INIT_MSG
+
+        if part_shape[0] != 0:
+            request = InitDataRequest(
+                name,
+                tuple(part_shape),
+                F.reverse_data_type_dict[dtype],
+                part_policy.policy_str,
+                init_func,
+            )
+            # The request is sent to the servers in one group, which are on the same machine.
+            for n in range(self._group_count):
+                server_id = part_policy.part_id * self._group_count + n
+                rpc.send_request(server_id, request)
+            for _ in range(self._group_count):
+                response = rpc.recv_response()
+                assert response.msg == INIT_MSG
 
         self.barrier()
-        # Create local shared-data
-        local_shape = shape.copy()
-        local_shape[0] = part_policy.get_part_size()
-        if name in self._part_policy:
-            raise RuntimeError("Policy %s has already exists!" % name)
-        if name in self._data_store:
-            raise RuntimeError("Data %s has already exists!" % name)
-        if name in self._full_data_shape:
-            raise RuntimeError("Data shape %s has already exists!" % name)
-        self._part_policy[name] = part_policy
-        self._all_possible_part_policy[part_policy.policy_str] = part_policy
-        shared_data = empty_shared_mem(
-            name + "-kvdata-",
-            False,
-            local_shape,
-            F.reverse_data_type_dict[dtype],
-        )
-        dlpack = shared_data.to_dlpack()
-        self._data_store[name] = F.zerocopy_from_dlpack(dlpack)
-        self._data_name_list.add(name)
-        if is_gdata:
-            self._gdata_name_list.add(name)
-        self._full_data_shape[name] = tuple(shape)
-        self._pull_handlers[name] = default_pull_handler
-        self._push_handlers[name] = default_push_handler
+        if part_shape[0] != 0:
+            # Create local shared-data
+            local_shape = shape.copy()
+            local_shape[0] = part_policy.get_part_size()
+            if name in self._part_policy:
+                raise RuntimeError("Policy %s has already exists!" % name)
+            if name in self._data_store:
+                raise RuntimeError("Data %s has already exists!" % name)
+            if name in self._full_data_shape:
+                raise RuntimeError("Data shape %s has already exists!" % name)
+            self._part_policy[name] = part_policy
+            self._all_possible_part_policy[part_policy.policy_str] = part_policy
+            shared_data = empty_shared_mem(
+                name + "-kvdata-",
+                False,
+                local_shape,
+                F.reverse_data_type_dict[dtype],
+            )
+            dlpack = shared_data.to_dlpack()
+            self._data_store[name] = F.zerocopy_from_dlpack(dlpack)
+            self._data_name_list.add(name)
+            if is_gdata:
+                self._gdata_name_list.add(name)
+            self._full_data_shape[name] = tuple(shape)
+            self._pull_handlers[name] = default_pull_handler
+            self._push_handlers[name] = default_push_handler
 
-        # Now we need to tell the backup server the new tensor.
-        request = SendMetaToBackupRequest(
-            name,
-            F.reverse_data_type_dict[dtype],
-            part_shape,
-            part_policy.policy_str,
-            self._pull_handlers[name],
-            self._push_handlers[name],
-        )
-        # send request to all the backup server nodes
-        for i in range(self._group_count - 1):
-            server_id = self._machine_id * self._group_count + i + 1
-            rpc.send_request(server_id, request)
-        # recv response from all the backup server nodes
-        for _ in range(self._group_count - 1):
-            response = rpc.recv_response()
-            assert response.msg == SEND_META_TO_BACKUP_MSG
+            # Now we need to tell the backup server the new tensor.
+            request = SendMetaToBackupRequest(
+                name,
+                F.reverse_data_type_dict[dtype],
+                part_shape,
+                part_policy.policy_str,
+                self._pull_handlers[name],
+                self._push_handlers[name],
+            )
+            # send request to all the backup server nodes
+            for i in range(self._group_count - 1):
+                server_id = self._machine_id * self._group_count + i + 1
+                rpc.send_request(server_id, request)
+            # recv response from all the backup server nodes
+            for _ in range(self._group_count - 1):
+                response = rpc.recv_response()
+                assert response.msg == SEND_META_TO_BACKUP_MSG
         self.barrier()
 
     def delete_data(self, name):
