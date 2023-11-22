@@ -69,7 +69,7 @@ if [[ -z ${cuda} ]]; then
 else
   mkdir -p build
   cd build
-  cmake -DUSE_CUDA=${cuda} ${extra_args} -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ..
+  cmake -DUSE_CUDA=${cuda} ${extra_args} -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ..
 fi
 
 if [[ ${PWD} == "${DGL_HOME}/build" ]]; then
