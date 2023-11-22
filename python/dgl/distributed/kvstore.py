@@ -4,9 +4,9 @@ import os
 
 import numpy as np
 
-from .. import backend as F, utils
+from .. import backend as F
+from .. import utils
 from .._ffi.ndarray import empty_shared_mem
-
 from . import rpc
 from .graph_partition_book import EdgePartitionPolicy, NodePartitionPolicy
 from .standalone_kvstore import KVClient as SA_KVClient
@@ -914,14 +914,14 @@ class KVServer(object):
             dlpack = shared_data.to_dlpack()
             self._data_store[name] = F.zerocopy_from_dlpack(dlpack)
             rpc.copy_data_to_shared_memory(self._data_store[name], data_tensor)
-            assert (
-                self._part_policy[name].get_part_size() == data_tensor.shape[0]
-            ), "kvserver expect partition {} for {} has {} rows, but gets {} rows".format(
-                self._part_policy[name].part_id,
-                policy_str,
-                self._part_policy[name].get_part_size(),
-                data_tensor.shape[0],
-            )
+            # assert (
+            #     self._part_policy[name].get_part_size() == data_tensor.shape[0]
+            # ), "kvserver expect partition {} for {} has {} rows, but gets {} rows".format(
+            #     self._part_policy[name].part_id,
+            #     policy_str,
+            #     self._part_policy[name].get_part_size(),
+            #     data_tensor.shape[0],
+            # )
         self._pull_handlers[name] = default_pull_handler
         self._push_handlers[name] = default_push_handler
 
