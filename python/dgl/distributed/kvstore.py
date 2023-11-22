@@ -1247,7 +1247,9 @@ class KVClient(object):
                 assert response.msg == SEND_META_TO_BACKUP_MSG
         else:
             # empty tensor
-            self._data_store[name] = F.zeros(shape, dtype)
+            self._data_store[name] = F.empty(
+                local_shape, F.reverse_data_type_dict[dtype]
+            )
             self._data_name_list.add(name)
             if is_gdata:
                 self._gdata_name_list.add(name)
