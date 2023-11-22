@@ -1200,18 +1200,19 @@ class KVClient(object):
                 assert response.msg == INIT_MSG
 
         self.barrier()
+        # Create local shared-data
+        local_shape = shape.copy()
+        local_shape[0] = part_policy.get_part_size()
+        if name in self._part_policy:
+            raise RuntimeError("Policy %s has already exists!" % name)
+        if name in self._data_store:
+            raise RuntimeError("Data %s has already exists!" % name)
+        if name in self._full_data_shape:
+            raise RuntimeError("Data shape %s has already exists!" % name)
+        self._part_policy[name] = part_policy
+        self._all_possible_part_policy[part_policy.policy_str] = part_policy
+
         if part_shape[0] != 0:
-            # Create local shared-data
-            local_shape = shape.copy()
-            local_shape[0] = part_policy.get_part_size()
-            if name in self._part_policy:
-                raise RuntimeError("Policy %s has already exists!" % name)
-            if name in self._data_store:
-                raise RuntimeError("Data %s has already exists!" % name)
-            if name in self._full_data_shape:
-                raise RuntimeError("Data shape %s has already exists!" % name)
-            self._part_policy[name] = part_policy
-            self._all_possible_part_policy[part_policy.policy_str] = part_policy
             shared_data = empty_shared_mem(
                 name + "-kvdata-",
                 False,
@@ -1244,6 +1245,16 @@ class KVClient(object):
             for _ in range(self._group_count - 1):
                 response = rpc.recv_response()
                 assert response.msg == SEND_META_TO_BACKUP_MSG
+        else:
+            self._data_store[name] = None
+            self._data_name_list.add(name)
+            if is_gdata:
+                self._gdata_name_list.add(name)
+            self._full_data_shape[name] = tuple(shape)
+            self._pull_handlers[name] = default_pull_handler
+            self._push_handlers[name] = default_push_handler
+
+
         self.barrier()
 
     def delete_data(self, name):
