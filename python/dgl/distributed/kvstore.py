@@ -1246,7 +1246,8 @@ class KVClient(object):
                 response = rpc.recv_response()
                 assert response.msg == SEND_META_TO_BACKUP_MSG
         else:
-            self._data_store[name] = None
+            # empty tensor
+            self._data_store[name] = F.zeros(shape, dtype)
             self._data_name_list.add(name)
             if is_gdata:
                 self._gdata_name_list.add(name)
