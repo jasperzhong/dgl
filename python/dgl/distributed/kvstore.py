@@ -6,7 +6,7 @@ import numpy as np
 
 from .. import backend as F
 from .. import utils
-from .._ffi.ndarray import empty_shared_mem
+from .._ffi.ndarray import empty, empty_shared_mem
 from . import rpc
 from .graph_partition_book import EdgePartitionPolicy, NodePartitionPolicy
 from .standalone_kvstore import KVClient as SA_KVClient
@@ -1247,9 +1247,9 @@ class KVClient(object):
                 assert response.msg == SEND_META_TO_BACKUP_MSG
         else:
             # empty tensor
-            self._data_store[name] = F.empty(
+            self._data_store[name] = F.zerocopy_from_dlpack(empty(
                 local_shape, F.reverse_data_type_dict[dtype]
-            )
+            ).to_dlpack())
             self._data_name_list.add(name)
             if is_gdata:
                 self._gdata_name_list.add(name)
