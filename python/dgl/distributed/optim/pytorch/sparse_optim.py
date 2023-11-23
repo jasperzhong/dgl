@@ -388,7 +388,7 @@ class DistSparseGradOptimizer(abc.ABC):
                 name = emb.weight.name
                 idx = th.cat(local_indics[name], dim=0)
                 grad = th.cat(local_grads[name], dim=0)
-                if len(idx) == 0:
+                if len(idx) == 0 and dist:
                     continue
                 self.update(
                     idx.to(device, non_blocking=True),
@@ -642,7 +642,7 @@ class SparseAdam(DistSparseGradOptimizer):
         emb : dgl.distributed.DistEmbedding
             Sparse embedding to update.
         """
-        print(f"Rank {self._rank} update {emb.name} with {idx.shape[0]} rows")
+        # print(f"Rank {self._rank} update {emb.name} with {idx.shape[0]} rows")
         beta1 = self._beta1
         beta2 = self._beta2
         eps = self._eps
