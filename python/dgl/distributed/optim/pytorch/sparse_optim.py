@@ -1,5 +1,6 @@
 """Node embedding optimizers for distributed training"""
 import abc
+import time
 import warnings
 from abc import abstractmethod
 from os.path import exists
@@ -45,6 +46,12 @@ class DistSparseGradOptimizer(abc.ABC):
         self._state = {}
         ## collect all hyper parameters for save
         self._defaults = {}
+
+        self._send_grad_time = 0
+        self._pull_time = 0
+        self._push_time = 0
+        self._h2d_d2h_time = 0
+        self._comp_time = 0
 
         if th.distributed.is_initialized():
             self._rank = th.distributed.get_rank()
@@ -255,6 +262,11 @@ class DistSparseGradOptimizer(abc.ABC):
         The step function is invoked at the end of every batch to push the gradients
         of the embeddings involved in a mini-batch to DGL's servers and update the embeddings.
         """
+        self._send_grad_time = 0
+        self._pull_time = 0
+        self._push_time = 0
+        self._h2d_d2h_time = 0
+        self._comp_time = 0
         with th.no_grad():
             local_indics = {emb.name: [] for emb in self._params}
             local_grads = {emb.name: [] for emb in self._params}
@@ -337,6 +349,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     # use scatter to sync across trainers about the p2p tensor size
                     # Note: If we have GPU nccl support, we can use all_to_all to
                     # sync information here
+                    start = time.time()
                     gather_list = list(
                         th.empty([self._world_size], dtype=th.int64).chunk(
                             self._world_size
@@ -373,6 +386,8 @@ class DistSparseGradOptimizer(abc.ABC):
                         grad_list,
                     )
                     local_grads[name] = grad_gather_list
+
+                    self._send_grad_time += time.time() - start
                 else:
                     local_indics[name] = [idics]
                     local_grads[name] = [grads]
@@ -399,6 +414,7 @@ class DistSparseGradOptimizer(abc.ABC):
         # synchronized gradient update
         if self._world_size > 1:
             th.distributed.barrier()
+        
 
     @abstractmethod
     def update(self, idx, grad, emb):
@@ -673,12 +689,22 @@ class SparseAdam(DistSparseGradOptimizer):
         # state_step dist tensor in the same node. So that, the read request may read an old
         # value (i.e., 0 in the first iteration) which will cause
         # update_power_corr to be NaN
+        start = time.time()
         state_val = state_step[state_idx] + 1
+        orig_mem = state_mem[state_idx]
+        orig_power = state_power[state_idx]
+        self._pull_time += time.time() - start
+        start = time.time()
         state_step[state_idx] = state_val
-        state_step = state_val.to(exec_dev)
-        orig_mem = state_mem[state_idx].to(exec_dev)
-        orig_power = state_power[state_idx].to(exec_dev)
+        self._push_time += time.time() - start
 
+        start = time.time()
+        state_step = state_val.to(exec_dev)
+        orig_mem = orig_mem.to(exec_dev)
+        orig_power = orig_power.to(exec_dev)
+        self._h2d_d2h_time += time.time() - start
+
+        start = time.time()
         grad_values = th.zeros(
             (grad_indices.shape[0], grad.shape[1]), device=exec_dev
         )
@@ -688,13 +714,19 @@ class SparseAdam(DistSparseGradOptimizer):
         grad_power = grad_values * grad_values
         update_mem = beta1 * orig_mem + (1.0 - beta1) * grad_mem
         update_power = beta2 * orig_power + (1.0 - beta2) * grad_power
+        self._comp_time += time.time() - start
+
+        start = time.time()
         update_mem_dst = update_mem.to(state_dev, non_blocking=True)
         update_power_dst = update_power.to(state_dev, non_blocking=True)
+        self._h2d_d2h_time += time.time() - start
+
         if state_block:
             # use events to try and overlap CPU and GPU as much as possible
             update_event = th.cuda.Event()
             update_event.record()
 
+        start = time.time()
         update_mem_corr = update_mem / (
             1.0 - th.pow(th.tensor(beta1, device=exec_dev), state_step)
         ).unsqueeze(1)
@@ -702,7 +734,9 @@ class SparseAdam(DistSparseGradOptimizer):
             1.0 - th.pow(th.tensor(beta2, device=exec_dev), state_step)
         ).unsqueeze(1)
         std_values = clr * update_mem_corr / (th.sqrt(update_power_corr) + eps)
+        self._comp_time += time.time() - start
 
+        start = time.time()
         std_values_dst = std_values.to(state_dev, non_blocking=True)
 
         if state_block:
@@ -711,11 +745,21 @@ class SparseAdam(DistSparseGradOptimizer):
             # wait for our transfers from exec_dev to state_dev to finish
             # before we can use them
             update_event.wait()
+        self._h2d_d2h_time += time.time() - start
+
+        start = time.time()
         state_mem[state_idx] = update_mem_dst
         state_power[state_idx] = update_power_dst
+        self._push_time += time.time() - start
 
+        start = time.time()
         if state_block:
             # wait for the transfer of std_values to finish before we
             # can use it
             std_event.wait()
+        self._h2d_d2h_time += time.time() - start
+
+        start = time.time()
         emb._tensor[state_idx] -= std_values_dst
+        self._push_time += time.time() - start
+
