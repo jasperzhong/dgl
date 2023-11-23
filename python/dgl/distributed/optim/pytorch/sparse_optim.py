@@ -50,8 +50,9 @@ class DistSparseGradOptimizer(abc.ABC):
         self._send_grad_time = 0
         self._pull_time = 0
         self._push_time = 0
-        self._h2d_d2h_time = 0
+        self._h2d_time = 0
         self._comp_time = 0
+        self._tot_time = 0
 
         if th.distributed.is_initialized():
             self._rank = th.distributed.get_rank()
@@ -265,8 +266,10 @@ class DistSparseGradOptimizer(abc.ABC):
         self._send_grad_time = 0
         self._pull_time = 0
         self._push_time = 0
-        self._h2d_d2h_time = 0
+        self._h2d_time = 0
         self._comp_time = 0
+        self._tot_time = 0
+        start = time.time()
         with th.no_grad():
             local_indics = {emb.name: [] for emb in self._params}
             local_grads = {emb.name: [] for emb in self._params}
@@ -411,6 +414,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     emb,
                 )
 
+        self._tot_time = time.time() - start
         # synchronized gradient update
         if self._world_size > 1:
             th.distributed.barrier()
@@ -702,7 +706,7 @@ class SparseAdam(DistSparseGradOptimizer):
         state_step = state_val.to(exec_dev)
         orig_mem = orig_mem.to(exec_dev)
         orig_power = orig_power.to(exec_dev)
-        self._h2d_d2h_time += time.time() - start
+        self._h2d_time += time.time() - start
 
         start = time.time()
         grad_values = th.zeros(
@@ -719,7 +723,7 @@ class SparseAdam(DistSparseGradOptimizer):
         start = time.time()
         update_mem_dst = update_mem.to(state_dev, non_blocking=True)
         update_power_dst = update_power.to(state_dev, non_blocking=True)
-        self._h2d_d2h_time += time.time() - start
+        self._h2d_time += time.time() - start
 
         if state_block:
             # use events to try and overlap CPU and GPU as much as possible
@@ -745,7 +749,7 @@ class SparseAdam(DistSparseGradOptimizer):
             # wait for our transfers from exec_dev to state_dev to finish
             # before we can use them
             update_event.wait()
-        self._h2d_d2h_time += time.time() - start
+        self._h2d_time += time.time() - start
 
         start = time.time()
         state_mem[state_idx] = update_mem_dst
@@ -757,7 +761,7 @@ class SparseAdam(DistSparseGradOptimizer):
             # wait for the transfer of std_values to finish before we
             # can use it
             std_event.wait()
-        self._h2d_d2h_time += time.time() - start
+        self._h2d_time += time.time() - start
 
         start = time.time()
         emb._tensor[state_idx] -= std_values_dst
