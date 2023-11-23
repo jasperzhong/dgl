@@ -114,7 +114,7 @@ class DistEmbedding:
         emb = self._tensor[idx].to(device, non_blocking=True)
         if F.is_recording():
             emb = F.attach_grad(emb)
-            print(f"Rank {self._rank} Name {self._name} idx {idx.shape} emb_require_grad {emb.requires_grad}")
+            # print(f"Rank {self._rank} Name {self._name} idx {idx.shape} emb_require_grad {emb.requires_grad}")
             self._trace.append((idx.to(device, non_blocking=True), emb))
         return emb
 

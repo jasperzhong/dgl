@@ -272,7 +272,8 @@ class DistSparseGradOptimizer(abc.ABC):
                         grads.append(trace[1].grad.data)
                     else:
                         # assert len(trace[0]) == 0
-                        print(f"Rank {self._rank} {name} has no grad")
+                        # print(f"Rank {self._rank} {name} has no grad")
+                        pass
                 # If the sparse embedding is not used in the previous forward step
                 # The idx and grad will be empty, initialize them as empty tensors to
                 # avoid crashing the optimizer step logic.
