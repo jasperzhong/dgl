@@ -249,7 +249,7 @@ class DistSparseGradOptimizer(abc.ABC):
                 "Cannot support policy: %s " % part_policy.policy_str
             )
 
-    def step(self):
+    def step(self, dist: bool = False):
         """The step function.
 
         The step function is invoked at the end of every batch to push the gradients
@@ -297,7 +297,7 @@ class DistSparseGradOptimizer(abc.ABC):
                 device = grads.device
 
                 # will send grad to each corresponding trainer
-                if self._world_size > 1:
+                if self._world_size > 1 and not dist:
                     # get idx split from kvstore
                     idx_split = kvstore.get_partid(emb.data_name, idics)
                     idx_split_size = []
@@ -387,6 +387,8 @@ class DistSparseGradOptimizer(abc.ABC):
                 name = emb.weight.name
                 idx = th.cat(local_indics[name], dim=0)
                 grad = th.cat(local_grads[name], dim=0)
+                if len(idx) == 0:
+                    continue
                 self.update(
                     idx.to(device, non_blocking=True),
                     grad.to(device, non_blocking=True),
