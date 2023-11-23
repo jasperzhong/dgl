@@ -272,7 +272,7 @@ class DistSparseGradOptimizer(abc.ABC):
                         grads.append(trace[1].grad.data)
                     else:
                         # assert len(trace[0]) == 0
-                        pass
+                        print(f"Rank {self._rank} {name} has no grad")
                 # If the sparse embedding is not used in the previous forward step
                 # The idx and grad will be empty, initialize them as empty tensors to
                 # avoid crashing the optimizer step logic.
@@ -387,7 +387,7 @@ class DistSparseGradOptimizer(abc.ABC):
                 name = emb.weight.name
                 idx = th.cat(local_indics[name], dim=0)
                 grad = th.cat(local_grads[name], dim=0)
-                if len(idx) == 0 and dist:
+                if len(idx) == 0:
                     continue
                 self.update(
                     idx.to(device, non_blocking=True),
