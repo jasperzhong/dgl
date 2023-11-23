@@ -387,7 +387,7 @@ class DistSparseGradOptimizer(abc.ABC):
                 name = emb.weight.name
                 idx = th.cat(local_indics[name], dim=0)
                 grad = th.cat(local_grads[name], dim=0)
-                if len(idx) == 0:
+                if len(idx) == 0 and dist:
                     continue
                 self.update(
                     idx.to(device, non_blocking=True),
