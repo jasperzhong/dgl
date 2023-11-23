@@ -111,6 +111,7 @@ class DistEmbedding:
             The requested node embeddings
         """
         idx = utils.toindex(idx).tousertensor()
+        print(f"Rank {self._rank} Name {self._name} idx {idx.shape}")
         emb = self._tensor[idx].to(device, non_blocking=True)
         if F.is_recording():
             emb = F.attach_grad(emb)
