@@ -195,6 +195,8 @@ class HeteroGraphConv(nn.Module):
                 rel_graph = g[stype, etype, dtype]
                 if stype not in src_inputs or dtype not in dst_inputs:
                     continue
+                if rel_graph.number_of_edges() == 0:
+                    continue
                 dstdata = self._get_module((stype, etype, dtype))(
                     rel_graph,
                     (src_inputs[stype], dst_inputs[dtype]),
