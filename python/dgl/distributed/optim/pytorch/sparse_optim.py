@@ -641,6 +641,7 @@ class SparseAdam(DistSparseGradOptimizer):
         emb : dgl.distributed.DistEmbedding
             Sparse embedding to update.
         """
+        print(f"Rank {self._rank} update {emb.name} with {idx.shape[0]} rows")
         beta1 = self._beta1
         beta2 = self._beta2
         eps = self._eps
