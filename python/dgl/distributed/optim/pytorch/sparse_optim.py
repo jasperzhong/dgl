@@ -613,6 +613,7 @@ class SparseAdam(DistSparseGradOptimizer):
             "_beta1": betas[0],
             "_beta2": betas[1],
         }
+        self.update_cnt = {}
         for emb in params:
             assert isinstance(
                 emb, DistEmbedding
@@ -648,6 +649,8 @@ class SparseAdam(DistSparseGradOptimizer):
             ), "{} already registered in the optimizer".format(emb.name)
             self._state[emb.name] = state
 
+            self.update_cnt[emb.name] = 0
+
     def update(self, idx, grad, emb):
         """Update embeddings in a sparse manner
         Sparse embeddings are updated in mini batches. We maintain gradient states for
@@ -662,6 +665,8 @@ class SparseAdam(DistSparseGradOptimizer):
         emb : dgl.distributed.DistEmbedding
             Sparse embedding to update.
         """
+        self.update_cnt[emb.name] += len(idx)
+
         beta1 = self._beta1
         beta2 = self._beta2
         eps = self._eps
