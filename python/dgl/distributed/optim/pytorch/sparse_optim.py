@@ -405,9 +405,15 @@ class DistSparseGradOptimizer(abc.ABC):
             for emb in self._params:
                 name = emb.weight.name
                 idx = th.cat(local_indics[name], dim=0)
-                grad = th.cat(local_grads[name], dim=0)
                 if len(idx) == 0 and dist:
                     continue
+                idx_split = kvstore.get_partid(emb.data_name, idx)
+                # all indices should be same 
+                if len(th.unique(idx_split)) > 1:
+                    print(f"Rank {self._rank} {name} has different idx_split")
+                    continue
+
+                grad = th.cat(local_grads[name], dim=0)
                 self.update(
                     idx.to(device, non_blocking=True),
                     grad.to(device, non_blocking=True),
