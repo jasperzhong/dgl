@@ -408,9 +408,10 @@ class DistSparseGradOptimizer(abc.ABC):
                 if len(idx) == 0 and dist:
                     continue
                 idx_split = kvstore.get_partid(emb.data_name, idx)
-                # all indices should be same 
-                if len(th.unique(idx_split)) > 1:
-                    print(f"Rank {self._rank} {name} has different idx_split")
+                local_machine_id = self._rank // trainers_per_server
+                # all indices should be local 
+                if not th.all(idx_split == local_machine_id):
+                    print(f"Rank {self._rank} {name} has remote idx")
                     continue
 
                 grad = th.cat(local_grads[name], dim=0)
