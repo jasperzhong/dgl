@@ -287,7 +287,7 @@ class DistSparseGradOptimizer(abc.ABC):
                         grads.append(trace[1].grad.data)
                     else:
                         # assert len(trace[0]) == 0
-                        # print(f"Rank {self._rank} {name} has no grad")
+                        print(f"Rank {self._rank} {name} has no grad")
                         pass
                 # If the sparse embedding is not used in the previous forward step
                 # The idx and grad will be empty, initialize them as empty tensors to
@@ -768,6 +768,12 @@ class SparseAdam(DistSparseGradOptimizer):
         self._h2d_d2h_time += time.time() - start
 
         start = time.time()
-        emb._tensor[state_idx] -= std_values_dst
+        emb_values = emb._tensor[state_idx] 
+        self._pull_time += time.time() - start
+        start = time.time()
+        emb_values -= std_values_dst
+        self._comp_time += time.time() - start
+        start = time.time()
+        emb._tensor[state_idx] = emb_values
         self._push_time += time.time() - start
 
