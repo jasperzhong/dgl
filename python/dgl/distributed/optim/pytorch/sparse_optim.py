@@ -1,5 +1,6 @@
 """Node embedding optimizers for distributed training"""
 import abc
+import os
 import time
 import warnings
 from abc import abstractmethod
@@ -14,7 +15,7 @@ from .... import backend as F
 from ...dist_tensor import DistTensor
 from ...graph_partition_book import EDGE_PART_POLICY, NODE_PART_POLICY
 from ...nn.pytorch import DistEmbedding
-from .utils import all2allv_gpu, alltoall_cpu, alltoallv_cpu
+from .utils import alltoall_cpu, alltoallv_cpu
 
 EMB_STATES = "emb_states"
 WORLD_SIZE = "world_size"
@@ -58,9 +59,13 @@ class DistSparseGradOptimizer(abc.ABC):
         if th.distributed.is_initialized():
             self._rank = th.distributed.get_rank()
             self._world_size = th.distributed.get_world_size()
+            self._local_rank = int(os.environ["LOCAL_RANK"])
+            self._local_world_size = int(os.environ["LOCAL_WORLD_SIZE"])
         else:
             self._rank = 0
             self._world_size = 1
+            self._local_rank = 0
+            self._local_world_size = 1
 
     def local_state_dict(self):
         """Return the state pertaining to current rank of the optimizer.
@@ -360,71 +365,50 @@ class DistSparseGradOptimizer(abc.ABC):
                     # use scatter to sync across trainers about the p2p tensor size
                     # Note: If we have GPU nccl support, we can use all_to_all to
                     # sync information here
+                    world_size = self._local_world_size if dist else self._world_size
+                    rank = self._local_rank if dist else self._rank
+
                     start = time.time()
                     gather_list = list(
-                        th.empty([self._world_size], dtype=th.int64).chunk(
-                            self._world_size
+                        th.empty([world_size], dtype=th.int64).chunk(
+                            world_size
                         )
                     )
                     alltoall_cpu(
-                        self._rank,
-                        self._world_size,
+                        rank,
+                        world_size,
                         gather_list,
                         idx_split_size,
+                        group=group
                     )
-                   
                     # use cpu until we have GPU alltoallv
-                    if not dist:
-                        idx_gather_list = [
-                            th.empty((int(num_emb),), dtype=idics.dtype)
-                            for num_emb in gather_list
-                        ]
-                        alltoallv_cpu(
-                            self._rank,
-                            self._world_size,
-                            idx_gather_list,
-                            idics_list,
-                        )
-                    else:
-                        idx_gather_list = [
-                            th.empty((int(num_emb),), dtype=idics.dtype, device=device)
-                            for num_emb in gather_list
-                        ]
-                        all2allv_gpu(
-                            self._rank,
-                            self._world_size,
-                            idx_gather_list,
-                            idics_list,
-                            group,
-                        )
+                    idx_gather_list = [
+                        th.empty((int(num_emb),), dtype=idics.dtype)
+                        for num_emb in gather_list
+                    ]
+                    alltoallv_cpu(
+                        rank,
+                        world_size,
+                        idx_gather_list,
+                        idics_list,
+                        group=group
+                    )
+                 
                     local_indics[name] = idx_gather_list
-                    if not dist:
-                        grad_gather_list = [
-                            th.empty(
-                                (int(num_emb), grads.shape[1]), dtype=grads.dtype
-                            )
-                            for num_emb in gather_list
-                        ]
-                        alltoallv_cpu(
-                            self._rank,
-                            self._world_size,
-                            grad_gather_list,
-                            grad_list,
+                    grad_gather_list = [
+                        th.empty(
+                            (int(num_emb), grads.shape[1]), dtype=grads.dtype
                         )
-                    else:
-                        grad_gather_list = [
-                            th.empty(
-                                (int(num_emb), grads.shape[1]), dtype=grads.dtype, device=device
-                            )
-                            for num_emb in gather_list
-                        ]
-                        all2allv_gpu(
-                            self._rank,
-                            self._world_size,
-                            grad_gather_list,
-                            grad_list,
-                            group,
-                        )
+                        for num_emb in gather_list
+                    ]
+                    alltoallv_cpu(
+                        rank,
+                        world_size,
+                        grad_gather_list,
+                        grad_list,
+                        group=group
+                    )
+               
                     local_grads[name] = grad_gather_list
 
                     self._send_grad_time += time.time() - start
@@ -447,8 +431,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     
                 if dist:
                     # check if the idx % num_gpus == local rank
-                    local_rank = self._rank % trainers_per_server
-                    mask = th.remainder(idx, trainers_per_server) == local_rank
+                    mask = th.remainder(idx, self._local_world_size) == self._local_rank
                     assert th.all(mask), f"Rank {self._rank} {name} has non-local idx"
                     
                 grad = th.cat(local_grads[name], dim=0)
