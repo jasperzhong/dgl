@@ -291,6 +291,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     if trace[1].grad is not None:
                         idics.append(trace[0])
                         grads.append(trace[1].grad.data)
+                        print(f"Rank {self._rank} {name} has grad device {grads[-1].device}")
                     else:
                         # assert len(trace[0]) == 0
                         print(f"Rank {self._rank} {name} has no grad")
