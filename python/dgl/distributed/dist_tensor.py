@@ -226,7 +226,8 @@ class DistTensor:
             uncached_values = uncached_values.to(device)
             self._h2d_d2h_time = time.time() - start
             ret = torch.empty(len(idx), *self._shape[1:], dtype=self._dtype, device=idx.device)
-            ret[cached_idx] = cached_values
+            if cached_idx is not None:
+                ret[cached_idx] = cached_values
             ret[uncached_idx] = uncached_values
             return ret
         else:
