@@ -791,6 +791,7 @@ class SparseAdam(DistSparseGradOptimizer):
         self._comp_time += time.time() - start
 
         start = time.time()
+        print(f"emb_values device {emb_values.device}")
         emb._tensor[state_idx] = emb_values
         self._push_time += time.time() - start - emb._tensor._h2d_d2h_time
         self._h2d_d2h_time += emb._tensor._h2d_d2h_time

@@ -240,6 +240,7 @@ class DistTensor:
         if self._gpu_cache is not None:
             device = self._gpu_cache.device
             idx = idx.to(device)
+            print("setitem", idx, val)
             _, cache_mask = self._gpu_cache.set(idx, val)
             uncached_mask = ~cache_mask
             uncached_idx = idx[uncached_mask]
