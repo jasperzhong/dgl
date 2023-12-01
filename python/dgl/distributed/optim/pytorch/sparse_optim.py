@@ -277,8 +277,8 @@ class DistSparseGradOptimizer(abc.ABC):
         self._tot_time = 0
         start = time.time()
         with th.no_grad():
-            local_indics = {emb.name: [] for emb in self._params}
-            local_grads = {emb.name: [] for emb in self._params}
+            local_indics = {emb.weight.name: [] for emb in self._params}
+            local_grads = {emb.weight.name: [] for emb in self._params}
             device = th.device("cpu")
             for emb in self._params:
                 name = emb.weight.name
