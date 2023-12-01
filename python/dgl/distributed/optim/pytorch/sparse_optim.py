@@ -444,9 +444,9 @@ class DistSparseGradOptimizer(abc.ABC):
                 grad = th.cat(local_grads[name], dim=0)
                 device = device_dict[name]
                 self.update(
-                    idx,
+                    idx.to(device, non_blocking=True),
                     grad.to(device, non_blocking=True),
-                    emb.to(device, non_blocking=True)
+                    emb
                 )
 
         self._tot_time = time.time() - start
