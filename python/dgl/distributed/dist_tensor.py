@@ -233,7 +233,8 @@ class DistTensor:
             idx = idx.to(device)
             _, uncached_idx = self._gpu_cache.set(idx, val)
             uncached_idx = uncached_idx.to('cpu')
-            self._set(uncached_idx, val[uncached_idx])
+            uncached_val = val[uncached_idx].to('cpu')
+            self._set(uncached_idx, uncached_val)
         else:
             return self._set(idx)
 
