@@ -218,6 +218,7 @@ class DistTensor:
 
     def __getitem__(self, idx):
         if self._gpu_cache is not None:
+            print(type(idx))
             device = self._gpu_cache.device
             idx = idx.to(device)
             cached_values, cached_idx, uncached_idx = self._gpu_cache.get(idx)
