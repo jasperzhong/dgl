@@ -1,5 +1,7 @@
 """Provide utils for distributed sparse optimizers
 """
+from typing import Optional
+
 import torch as th
 import torch.distributed as dist
 
@@ -43,6 +45,9 @@ def alltoallv_cpu(rank, world_size, output_tensor_list, input_tensor_list):
     input_tensor_list : List of tensor
         The tensors to exchange
     """
+    output_tensor_list = [
+        tensor.to(th.device("cpu")) for tensor in output_tensor_list
+    ]
     # send tensor to each target trainer using torch.distributed.isend
     # isend is async
     senders = []
@@ -60,3 +65,28 @@ def alltoallv_cpu(rank, world_size, output_tensor_list, input_tensor_list):
             dist.recv(output_tensor_list[i], src=i)
 
     th.distributed.barrier()
+
+
+def all2allv_gpu(rank, world_size, output_tensor_list, input_tensor_list, group: Optional[dist.ProcessGroup] = None):
+    """Each process scatters list of input tensors to all processes in a cluster
+    and return gathered list of tensors in output list.
+
+    Parameters
+    ----------
+    rank : int
+        The rank of current worker
+    world_size : int
+        The size of the entire
+    output_tensor_list : List of tensor
+        The received tensors
+    input_tensor_list : List of tensor
+        The tensors to exchange
+    """
+    # use pytorch's all_to_all to exchange tensors
+    input_tensor_list = [
+        tensor.to(th.device("cuda")) for tensor in input_tensor_list
+    ]
+    output_tensor_list = [
+        tensor.to(th.device("cuda")) for tensor in output_tensor_list
+    ]
+    dist.all_to_all(output_tensor_list, input_tensor_list, group=group)

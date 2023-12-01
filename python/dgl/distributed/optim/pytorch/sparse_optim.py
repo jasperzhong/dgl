@@ -4,6 +4,7 @@ import time
 import warnings
 from abc import abstractmethod
 from os.path import exists
+from typing import Optional
 
 import torch as th
 
@@ -13,7 +14,7 @@ from .... import backend as F
 from ...dist_tensor import DistTensor
 from ...graph_partition_book import EDGE_PART_POLICY, NODE_PART_POLICY
 from ...nn.pytorch import DistEmbedding
-from .utils import alltoall_cpu, alltoallv_cpu
+from .utils import all2allv_gpu, alltoall_cpu, alltoallv_cpu
 
 EMB_STATES = "emb_states"
 WORLD_SIZE = "world_size"
@@ -257,7 +258,7 @@ class DistSparseGradOptimizer(abc.ABC):
                 "Cannot support policy: %s " % part_policy.policy_str
             )
 
-    def step(self, dist: bool = False):
+    def step(self, dist: bool = False, group: Optional[th.distributed.ProcessGroup] = None):
         """The step function.
 
         The step function is invoked at the end of every batch to push the gradients
@@ -313,9 +314,16 @@ class DistSparseGradOptimizer(abc.ABC):
                 device = grads.device
 
                 # will send grad to each corresponding trainer
-                if self._world_size > 1 and not dist:
+                if self._world_size > 1:
                     # get idx split from kvstore
                     idx_split = kvstore.get_partid(emb.data_name, idics)
+                    if dist:
+                        local_machine_id = self._rank // trainers_per_server
+                        # all indices should be local 
+                        if not th.all(idx_split == local_machine_id):
+                            # print(f"Rank {self._rank} {name} has remote idx")
+                            continue
+
                     idx_split_size = []
                     idics_list = []
                     grad_list = []
@@ -364,30 +372,49 @@ class DistSparseGradOptimizer(abc.ABC):
                         gather_list,
                         idx_split_size,
                     )
+                   
                     # use cpu until we have GPU alltoallv
                     idx_gather_list = [
-                        th.empty((int(num_emb),), dtype=idics.dtype)
+                        th.empty((int(num_emb),), dtype=idics.dtype, device=device)
                         for num_emb in gather_list
                     ]
-                    alltoallv_cpu(
-                        self._rank,
-                        self._world_size,
-                        idx_gather_list,
-                        idics_list,
-                    )
+                    if not dist:
+                        alltoallv_cpu(
+                            self._rank,
+                            self._world_size,
+                            idx_gather_list,
+                            idics_list,
+                        )
+                    else:
+                        all2allv_gpu(
+                            self._rank,
+                            self._world_size,
+                            idx_gather_list,
+                            idics_list,
+                            group,
+                        )
                     local_indics[name] = idx_gather_list
                     grad_gather_list = [
                         th.empty(
-                            (int(num_emb), grads.shape[1]), dtype=grads.dtype
+                            (int(num_emb), grads.shape[1]), dtype=grads.dtype, device=device
                         )
                         for num_emb in gather_list
                     ]
-                    alltoallv_cpu(
-                        self._rank,
-                        self._world_size,
-                        grad_gather_list,
-                        grad_list,
-                    )
+                    if not dist:
+                        alltoallv_cpu(
+                            self._rank,
+                            self._world_size,
+                            grad_gather_list,
+                            grad_list,
+                        )
+                    else:
+                        all2allv_gpu(
+                            self._rank,
+                            self._world_size,
+                            grad_gather_list,
+                            grad_list,
+                            group,
+                        )
                     local_grads[name] = grad_gather_list
 
                     self._send_grad_time += time.time() - start
@@ -407,13 +434,13 @@ class DistSparseGradOptimizer(abc.ABC):
                 idx = th.cat(local_indics[name], dim=0)
                 if len(idx) == 0 and dist:
                     continue
-                idx_split = kvstore.get_partid(emb.data_name, idx)
-                local_machine_id = self._rank // trainers_per_server
-                # all indices should be local 
-                if not th.all(idx_split == local_machine_id):
-                    print(f"Rank {self._rank} {name} has remote idx")
-                    continue
-
+                    
+                if dist:
+                    # check if the idx % num_gpus == local rank
+                    local_rank = self._rank % trainers_per_server
+                    mask = th.remainder(idx, trainers_per_server) == local_rank
+                    assert th.all(mask), f"Rank {self._rank} {name} has non-local idx"
+                    
                 grad = th.cat(local_grads[name], dim=0)
                 self.update(
                     idx.to(device, non_blocking=True),
