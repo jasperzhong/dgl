@@ -88,6 +88,7 @@ class DistEmbedding:
         self._name = name
         self._num_embeddings = num_embeddings
         self._embedding_dim = embedding_dim
+        self.gpu_cache = gpu_cache
 
         # Check whether it is multi-gpu/distributed training or not
         if th.distributed.is_initialized():
