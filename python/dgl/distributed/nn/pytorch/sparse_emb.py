@@ -74,6 +74,7 @@ class DistEmbedding:
         name=None,
         init_func=None,
         part_policy=None,
+        gpu_cache=None,
     ):
         self._tensor = DistTensor(
             (num_embeddings, embedding_dim),
@@ -81,6 +82,7 @@ class DistEmbedding:
             name,
             init_func=init_func,
             part_policy=part_policy,
+            gpu_cache=gpu_cache
         )
         self._trace = []
         self._name = name

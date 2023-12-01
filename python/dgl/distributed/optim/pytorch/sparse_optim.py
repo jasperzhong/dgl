@@ -439,11 +439,6 @@ class DistSparseGradOptimizer(abc.ABC):
                 if len(idx) == 0 and dist:
                     continue
                     
-                if dist:
-                    # check if the idx % num_gpus == local rank
-                    mask = th.remainder(idx, self._local_world_size) == self._local_rank
-                    assert th.all(mask), f"Rank {self._rank} {name} has non-local idx"
-                    
                 grad = th.cat(local_grads[name], dim=0)
                 self.update(
                     idx.to(device, non_blocking=True),

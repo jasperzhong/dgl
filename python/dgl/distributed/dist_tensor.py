@@ -2,8 +2,10 @@
 
 import os
 
-from .. import backend as F, utils
+import torch
 
+from .. import backend as F
+from .. import utils
 from .dist_context import is_initialized
 from .kvstore import get_kvstore
 from .role import get_role
@@ -118,6 +120,7 @@ class DistTensor:
         persistent=False,
         is_gdata=True,
         attach=True,
+        gpu_cache=None,
     ):
         self.kvstore = get_kvstore()
         assert (
@@ -127,6 +130,7 @@ class DistTensor:
         self._dtype = dtype
         self._attach = attach
         self._is_gdata = is_gdata
+        self._gpu_cache = gpu_cache
 
         part_policies = self.kvstore.all_possible_part_policy
         # If a user doesn't provide a partition policy, we should find one based on
@@ -198,17 +202,40 @@ class DistTensor:
         )
         if not self._persistent and self._owner and initialized:
             self.kvstore.delete_data(self._name)
-
-    def __getitem__(self, idx):
+        
+    def _get(self, idx):
         idx = utils.toindex(idx)
         idx = idx.tousertensor()
         return self.kvstore.pull(name=self._name, id_tensor=idx)
 
-    def __setitem__(self, idx, val):
+    def _set(self, idx, val):
         idx = utils.toindex(idx)
         idx = idx.tousertensor()
         # TODO(zhengda) how do we want to support broadcast (e.g., G.ndata['h'][idx] = 1).
         self.kvstore.push(name=self._name, id_tensor=idx, data_tensor=val)
+
+    def __getitem__(self, idx):
+        if self._gpu_cache is not None:
+            device = self._gpu_cache.device
+            idx = idx.to(device)
+            cached_values, cached_idx, uncached_idx = self._gpu_cache.get(idx)
+            uncached_values = self._get(uncached_idx.to('cpu')).to(device, non_blocking=True)
+            ret = torch.empty(len(idx), *self._shape[1:], dtype=self._dtype, device=idx.device)
+            ret[cached_idx] = cached_values
+            ret[uncached_idx] = uncached_values
+            return ret
+        else:
+            return self._get(idx)
+
+    def __setitem__(self, idx, val):
+        if self._gpu_cache is not None:
+            device = self._gpu_cache.device
+            idx = idx.to(device)
+            _, uncached_idx = self._gpu_cache.set(idx, val)
+            uncached_idx = uncached_idx.to('cpu')
+            self._set(uncached_idx, val[uncached_idx])
+        else:
+            return self._set(idx)
 
     @property
     def kvstore_key(self):
