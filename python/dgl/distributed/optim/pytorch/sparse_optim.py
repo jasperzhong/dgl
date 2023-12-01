@@ -280,6 +280,7 @@ class DistSparseGradOptimizer(abc.ABC):
             local_indics = {emb.weight.name: [] for emb in self._params}
             local_grads = {emb.weight.name: [] for emb in self._params}
             device = th.device("cpu")
+            device_dict = {}
             for emb in self._params:
                 name = emb.weight.name
                 kvstore = emb.weight.kvstore
@@ -317,6 +318,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     )
                 )
                 device = grads.device
+                device_dict[name] = device
 
                 # will send grad to each corresponding trainer
                 if self._world_size > 1:
@@ -440,10 +442,11 @@ class DistSparseGradOptimizer(abc.ABC):
                     continue
                     
                 grad = th.cat(local_grads[name], dim=0)
+                device = device_dict[name]
                 self.update(
                     idx,
-                    grad,
-                    emb,
+                    grad.to(device, non_blocking=True),
+                    emb.to(device, non_blocking=True)
                 )
 
         self._tot_time = time.time() - start
