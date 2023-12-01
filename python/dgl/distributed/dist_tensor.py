@@ -221,6 +221,7 @@ class DistTensor:
             device = self._gpu_cache.device
             idx = idx.to(device)
             cached_values, cached_idx, uncached_idx = self._gpu_cache.get(idx)
+            print(f"{self._name} cached_idx {cached_idx} uncached_idx {uncached_idx}")
             uncached_values = self._get(uncached_idx.to('cpu'))
             start = time.time()
             uncached_values = uncached_values.to(device)
