@@ -291,7 +291,6 @@ class DistSparseGradOptimizer(abc.ABC):
                     if trace[1].grad is not None:
                         idics.append(trace[0])
                         grads.append(trace[1].grad.data)
-                        print(f"Rank {self._rank} {name} has grad device {grads[-1].device}")
                     else:
                         # assert len(trace[0]) == 0
                         print(f"Rank {self._rank} {name} has no grad")
@@ -318,6 +317,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     )
                 )
                 device = grads.device
+                print(f"Rank {self._rank} {name} has grad device {device}")
 
                 # will send grad to each corresponding trainer
                 if self._world_size > 1:
@@ -440,6 +440,7 @@ class DistSparseGradOptimizer(abc.ABC):
                 if len(idx) == 0 and dist:
                     continue
                     
+                print(f"Before update: Rank {self._rank} {name} has grad device {device}")
                 grad = th.cat(local_grads[name], dim=0)
                 self.update(
                     idx.to(device, non_blocking=True),
