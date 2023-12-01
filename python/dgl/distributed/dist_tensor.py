@@ -222,14 +222,14 @@ class DistTensor:
             idx = idx.to(device)
             cached_values, cache_mask = self._gpu_cache.get(idx)
             uncached_mask = ~cache_mask
-            uncached_idx = idx[uncached_mask]
+            uncached_idx = idx
+            # uncached_idx = idx[uncached_mask]
             uncached_values = self._get(uncached_idx.to('cpu'))
             start = time.time()
             uncached_values = uncached_values.to(device)
             self._h2d_d2h_time = time.time() - start
-            ret = torch.empty(len(idx), *self._shape[1:], dtype=self._dtype, device=idx.device)
-            if cached_values is not None:
-                ret[cache_mask] = cached_values
+            ret = torch.empty(len(idx), *self._shape[1:], dtype=self._dtype, device=device)
+            # ret[cache_mask] = cached_values
             ret[uncached_mask] = uncached_values
             return ret
         else:
@@ -242,10 +242,12 @@ class DistTensor:
             idx = idx.to(device)
             _, cache_mask = self._gpu_cache.set(idx, val)
             uncached_mask = ~cache_mask
-            uncached_idx = idx[uncached_mask]
+            # uncached_idx = idx[uncached_mask]
+            uncached_idx = idx
             start = time.time()
             uncached_idx = uncached_idx.to('cpu')
-            uncached_val = val[uncached_mask].to('cpu')
+            # uncached_val = val[uncached_mask].to('cpu')
+            uncached_val = val.to('cpu')
             self._h2d_d2h_time = time.time() - start
             self._set(uncached_idx, uncached_val)
         else:
