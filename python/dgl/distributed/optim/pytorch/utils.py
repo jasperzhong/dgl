@@ -24,9 +24,9 @@ def alltoall_cpu(rank, rank_list, output_tensor_list, input_tensor_list, group: 
     input_tensor_list = [
         tensor.to(th.device("cpu")) for tensor in input_tensor_list
     ]
-    for i in rank_list:
+    for i, r in enumerate(rank_list):
         dist.scatter(
-            output_tensor_list[i], input_tensor_list if i == rank else [], src=i, group=group
+            output_tensor_list[i], input_tensor_list if r == rank else [], src=r, group=group
         )
 
 
@@ -48,18 +48,18 @@ def alltoallv_cpu(rank, rank_list, output_tensor_list, input_tensor_list, group:
     # send tensor to each target trainer using torch.distributed.isend
     # isend is async
     senders = []
-    for i in rank_list:
-        if i == rank:
+    for i, r in enumerate(rank_list):
+        if r == rank:
             output_tensor_list[i] = input_tensor_list[i].to(th.device("cpu"))
         else:
             sender = dist.isend(
-                input_tensor_list[i].to(th.device("cpu")), dst=i, group=group
+                input_tensor_list[i].to(th.device("cpu")), dst=r, group=group
             )
             senders.append(sender)
 
-    for i in rank_list:
-        if i != rank:
-            dist.recv(output_tensor_list[i], src=i, group=group)
+    for i, r in enumerate(rank_list):
+        if r != rank:
+            dist.recv(output_tensor_list[i], src=r, group=group)
 
     th.distributed.barrier(group)
 
