@@ -79,11 +79,4 @@ def all2allv_gpu(rank, world_size, output_tensor_list, input_tensor_list, group:
     input_tensor_list : List of tensor
         The tensors to exchange
     """
-    # use pytorch's all_to_all to exchange tensors
-    input_tensor_list = [
-        tensor.to(th.device("cuda")) for tensor in input_tensor_list
-    ]
-    output_tensor_list = [
-        tensor.to(th.device("cuda")) for tensor in output_tensor_list
-    ]
     dist.all_to_all(output_tensor_list, input_tensor_list, group=group)

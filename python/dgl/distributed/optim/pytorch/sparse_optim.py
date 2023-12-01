@@ -374,11 +374,11 @@ class DistSparseGradOptimizer(abc.ABC):
                     )
                    
                     # use cpu until we have GPU alltoallv
-                    idx_gather_list = [
-                        th.empty((int(num_emb),), dtype=idics.dtype)
-                        for num_emb in gather_list
-                    ]
                     if not dist:
+                        idx_gather_list = [
+                            th.empty((int(num_emb),), dtype=idics.dtype)
+                            for num_emb in gather_list
+                        ]
                         alltoallv_cpu(
                             self._rank,
                             self._world_size,
@@ -386,6 +386,10 @@ class DistSparseGradOptimizer(abc.ABC):
                             idics_list,
                         )
                     else:
+                        idx_gather_list = [
+                            th.empty((int(num_emb),), dtype=idics.dtype, device=device)
+                            for num_emb in gather_list
+                        ]
                         all2allv_gpu(
                             self._rank,
                             self._world_size,
@@ -394,13 +398,13 @@ class DistSparseGradOptimizer(abc.ABC):
                             group,
                         )
                     local_indics[name] = idx_gather_list
-                    grad_gather_list = [
-                        th.empty(
-                            (int(num_emb), grads.shape[1]), dtype=grads.dtype
-                        )
-                        for num_emb in gather_list
-                    ]
                     if not dist:
+                        grad_gather_list = [
+                            th.empty(
+                                (int(num_emb), grads.shape[1]), dtype=grads.dtype
+                            )
+                            for num_emb in gather_list
+                        ]
                         alltoallv_cpu(
                             self._rank,
                             self._world_size,
@@ -408,6 +412,12 @@ class DistSparseGradOptimizer(abc.ABC):
                             grad_list,
                         )
                     else:
+                        grad_gather_list = [
+                            th.empty(
+                                (int(num_emb), grads.shape[1]), dtype=grads.dtype, device=device
+                            )
+                            for num_emb in gather_list
+                        ]
                         all2allv_gpu(
                             self._rank,
                             self._world_size,
