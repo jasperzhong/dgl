@@ -779,7 +779,8 @@ class SparseAdam(DistSparseGradOptimizer):
         start = time.time()
         # std_values_dst = std_values.to(state_dev, non_blocking=True)
         emb_values = emb._tensor[state_idx]
-        self._pull_time += time.time() - start
+        self._pull_time += time.time() - start - emb._tensor._h2d_d2h_time
+        self._h2d_d2h_time += emb._tensor._h2d_d2h_time
 
         start = time.time()
         emb_values = emb_values.to(exec_dev)
@@ -791,14 +792,17 @@ class SparseAdam(DistSparseGradOptimizer):
 
         start = time.time()
         emb._tensor[state_idx] = emb_values
-        self._push_time += time.time() - start
-        # if state_block:
-        #     std_event = th.cuda.Event()
-        #     std_event.record()
-        #     # wait for our transfers from exec_dev to state_dev to finish
-        #     # before we can use them
-        #     update_event.wait()
-        # self._h2d_d2h_time += time.time() - start
+        self._push_time += time.time() - start - emb._tensor._h2d_d2h_time
+        self._h2d_d2h_time += emb._tensor._h2d_d2h_time
+
+        start = time.time()
+        if state_block:
+            # std_event = th.cuda.Event()
+            # std_event.record()
+            # wait for our transfers from exec_dev to state_dev to finish
+            # before we can use them
+            update_event.wait()
+        self._h2d_d2h_time += time.time() - start
 
         start = time.time()
         state_mem[state_idx] = update_mem_dst

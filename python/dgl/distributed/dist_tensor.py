@@ -1,6 +1,7 @@
 """Define distributed tensor."""
 
 import os
+import time
 
 import torch
 
@@ -131,6 +132,7 @@ class DistTensor:
         self._attach = attach
         self._is_gdata = is_gdata
         self._gpu_cache = gpu_cache
+        self._h2d_d2h_time = 0
 
         part_policies = self.kvstore.all_possible_part_policy
         # If a user doesn't provide a partition policy, we should find one based on
@@ -219,12 +221,16 @@ class DistTensor:
             device = self._gpu_cache.device
             idx = idx.to(device)
             cached_values, cached_idx, uncached_idx = self._gpu_cache.get(idx)
-            uncached_values = self._get(uncached_idx.to('cpu')).to(device, non_blocking=True)
+            uncached_values = self._get(uncached_idx.to('cpu'))
+            start = time.time()
+            uncached_values = uncached_values.to(device)
+            self._h2d_d2h_time = time.time() - start
             ret = torch.empty(len(idx), *self._shape[1:], dtype=self._dtype, device=idx.device)
             ret[cached_idx] = cached_values
             ret[uncached_idx] = uncached_values
             return ret
         else:
+            self._h2d_d2h_time = 0
             return self._get(idx)
 
     def __setitem__(self, idx, val):
@@ -232,10 +238,15 @@ class DistTensor:
             device = self._gpu_cache.device
             idx = idx.to(device)
             _, uncached_idx = self._gpu_cache.set(idx, val)
+            start = time.time()
             uncached_idx = uncached_idx.to('cpu')
             uncached_val = val[uncached_idx].to('cpu')
+            self._h2d_d2h_time = time.time() - start
             self._set(uncached_idx, uncached_val)
         else:
+            start = time.time()
+            idx, val = idx.to('cpu'), val.to('cpu')
+            self._h2d_d2h_time = time.time() - start
             self._set(idx, val)
 
     @property
