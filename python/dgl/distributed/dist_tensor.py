@@ -236,7 +236,7 @@ class DistTensor:
             uncached_val = val[uncached_idx].to('cpu')
             self._set(uncached_idx, uncached_val)
         else:
-            return self._set(idx)
+            self._set(idx, val)
 
     @property
     def kvstore_key(self):
