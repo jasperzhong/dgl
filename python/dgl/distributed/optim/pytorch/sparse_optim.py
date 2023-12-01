@@ -370,7 +370,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     # Note: If we have GPU nccl support, we can use all_to_all to
                     # sync information here
                     world_size = self._local_world_size if dist else self._world_size
-                    rank = self._local_rank if dist else self._rank
+                    rank = self._rank
 
                     start = time.time()
                     gather_list = list(
