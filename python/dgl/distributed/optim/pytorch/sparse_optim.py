@@ -317,7 +317,6 @@ class DistSparseGradOptimizer(abc.ABC):
                     )
                 )
                 device = grads.device
-                print(f"Rank {self._rank} {name} has grad device {device}")
 
                 # will send grad to each corresponding trainer
                 if self._world_size > 1:
@@ -440,11 +439,10 @@ class DistSparseGradOptimizer(abc.ABC):
                 if len(idx) == 0 and dist:
                     continue
                     
-                print(f"Before update: Rank {self._rank} {name} has grad device {device}")
                 grad = th.cat(local_grads[name], dim=0)
                 self.update(
-                    idx.to(device, non_blocking=True),
-                    grad.to(device, non_blocking=True),
+                    idx,
+                    grad,
                     emb,
                 )
 
@@ -793,7 +791,6 @@ class SparseAdam(DistSparseGradOptimizer):
         self._comp_time += time.time() - start
 
         start = time.time()
-        print(f"emb_values device {emb_values.device}")
         emb._tensor[state_idx] = emb_values
         self._push_time += time.time() - start - emb._tensor._h2d_d2h_time
         self._h2d_d2h_time += emb._tensor._h2d_d2h_time
