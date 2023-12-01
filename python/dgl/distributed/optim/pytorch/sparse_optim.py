@@ -327,6 +327,8 @@ class DistSparseGradOptimizer(abc.ABC):
                         # all indices should be local 
                         if not th.all(idx_split == local_machine_id):
                             # print(f"Rank {self._rank} {name} has remote idx")
+                            local_indics[name] = [th.zero((0,), dtype=th.long, device=th.device("cpu"))]
+                            local_grads[name] = [th.zero((0, emb.embedding_dim), dtype=th.float32, device=th.device("cpu"))]
                             continue
 
                     idx_split_size = []
