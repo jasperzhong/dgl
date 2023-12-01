@@ -219,7 +219,7 @@ class DistTensor:
     def __getitem__(self, idx):
         if self._gpu_cache is not None:
             device = self._gpu_cache.device
-            idx = idx.to(device)
+            idx = idx.clone().to(device)
             cached_values, cached_idx, uncached_idx = self._gpu_cache.get(idx)
             print(f"{self._name} cached_idx {idx} uncached_idx {uncached_idx}")
             uncached_values = self._get(uncached_idx.to('cpu'))
@@ -238,7 +238,7 @@ class DistTensor:
     def __setitem__(self, idx, val):
         if self._gpu_cache is not None:
             device = self._gpu_cache.device
-            idx = idx.to(device)
+            idx = idx.clone().to(device)
             _, uncached_idx = self._gpu_cache.set(idx, val)
             start = time.time()
             uncached_idx = uncached_idx.to('cpu')
