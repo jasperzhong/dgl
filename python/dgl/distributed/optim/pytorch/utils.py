@@ -45,9 +45,6 @@ def alltoallv_cpu(rank, world_size, output_tensor_list, input_tensor_list):
     input_tensor_list : List of tensor
         The tensors to exchange
     """
-    output_tensor_list = [
-        tensor.to(th.device("cpu")) for tensor in output_tensor_list
-    ]
     # send tensor to each target trainer using torch.distributed.isend
     # isend is async
     senders = []

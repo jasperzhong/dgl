@@ -375,7 +375,7 @@ class DistSparseGradOptimizer(abc.ABC):
                    
                     # use cpu until we have GPU alltoallv
                     idx_gather_list = [
-                        th.empty((int(num_emb),), dtype=idics.dtype, device=device)
+                        th.empty((int(num_emb),), dtype=idics.dtype)
                         for num_emb in gather_list
                     ]
                     if not dist:
@@ -396,7 +396,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     local_indics[name] = idx_gather_list
                     grad_gather_list = [
                         th.empty(
-                            (int(num_emb), grads.shape[1]), dtype=grads.dtype, device=device
+                            (int(num_emb), grads.shape[1]), dtype=grads.dtype
                         )
                         for num_emb in gather_list
                     ]
