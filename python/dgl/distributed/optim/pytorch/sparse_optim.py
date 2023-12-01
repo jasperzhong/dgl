@@ -371,6 +371,10 @@ class DistSparseGradOptimizer(abc.ABC):
                     # sync information here
                     world_size = self._local_world_size if dist else self._world_size
                     rank = self._rank
+                    rank_list = list(range(world_size))
+                    if dist:
+                        rank_list = [rank + local_machine_id * self._local_world_size for rank in rank_list]
+
 
                     start = time.time()
                     gather_list = list(
@@ -380,7 +384,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     )
                     alltoall_cpu(
                         rank,
-                        world_size,
+                        rank_list,
                         gather_list,
                         idx_split_size,
                         group=group
@@ -392,7 +396,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     ]
                     alltoallv_cpu(
                         rank,
-                        world_size,
+                        rank_list,
                         idx_gather_list,
                         idics_list,
                         group=group
@@ -407,7 +411,7 @@ class DistSparseGradOptimizer(abc.ABC):
                     ]
                     alltoallv_cpu(
                         rank,
-                        world_size,
+                        rank_list,
                         grad_gather_list,
                         grad_list,
                         group=group

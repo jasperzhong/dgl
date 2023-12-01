@@ -6,7 +6,7 @@ import torch as th
 import torch.distributed as dist
 
 
-def alltoall_cpu(rank, world_size, output_tensor_list, input_tensor_list, group: Optional[dist.ProcessGroup] = None):
+def alltoall_cpu(rank, rank_list, output_tensor_list, input_tensor_list, group: Optional[dist.ProcessGroup] = None):
     """Each process scatters list of input tensors to all processes in a cluster
     and return gathered list of tensors in output list. The tensors should have the same shape.
 
@@ -24,13 +24,13 @@ def alltoall_cpu(rank, world_size, output_tensor_list, input_tensor_list, group:
     input_tensor_list = [
         tensor.to(th.device("cpu")) for tensor in input_tensor_list
     ]
-    for i in range(world_size):
+    for i in range(rank_list):
         dist.scatter(
             output_tensor_list[i], input_tensor_list if i == rank else [], src=i, group=group
         )
 
 
-def alltoallv_cpu(rank, world_size, output_tensor_list, input_tensor_list, group: Optional[dist.ProcessGroup] = None):
+def alltoallv_cpu(rank, rank_list, output_tensor_list, input_tensor_list, group: Optional[dist.ProcessGroup] = None):
     """Each process scatters list of input tensors to all processes in a cluster
     and return gathered list of tensors in output list.
 
@@ -48,7 +48,7 @@ def alltoallv_cpu(rank, world_size, output_tensor_list, input_tensor_list, group
     # send tensor to each target trainer using torch.distributed.isend
     # isend is async
     senders = []
-    for i in range(world_size):
+    for i in range(rank_list):
         if i == rank:
             output_tensor_list[i] = input_tensor_list[i].to(th.device("cpu"))
         else:
@@ -57,9 +57,9 @@ def alltoallv_cpu(rank, world_size, output_tensor_list, input_tensor_list, group
             )
             senders.append(sender)
 
-    for i in range(world_size):
+    for i in range(rank_list):
         if i != rank:
             dist.recv(output_tensor_list[i], src=i, group=group)
 
-    th.distributed.barrier()
+    th.distributed.barrier(group)
 
