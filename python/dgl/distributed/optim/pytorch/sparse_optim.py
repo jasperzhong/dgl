@@ -334,6 +334,10 @@ class DistSparseGradOptimizer(abc.ABC):
                     grad_list = []
                     # split idx and grad first
                     for i in range(kvstore.num_servers):
+                        if dist:
+                            if i != local_machine_id:
+                                continue
+
                         mask = idx_split == i
                         idx_i = idics[mask]
                         grad_i = grads[mask]
