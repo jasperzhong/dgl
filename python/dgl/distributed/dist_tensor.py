@@ -239,11 +239,22 @@ class DistTensor:
         if self._gpu_cache is not None:
             device = self._gpu_cache.device
             idx_gpu = idx.to(device, copy=True)
-            self._gpu_cache.set(idx_gpu, val)
-            start = time.time()
-            val = val.to('cpu')
-            self._h2d_d2h_time = time.time() - start
-            self._set(idx, val)
+            _, cache_mask = self._gpu_cache.set(idx_gpu, val)
+            if self._gpu_cache.write_through:
+                start = time.time()
+                val = val.to('cpu')
+                self._h2d_d2h_time = time.time() - start
+                self._set(idx, val)
+            else:
+                uncached_mask = ~cache_mask
+                uncached_idx = idx[uncached_mask]
+                uncached_val = val[uncached_mask]
+                if len(uncached_idx) > 0:
+                    start = time.time()
+                    uncached_idx = uncached_idx.to('cpu')
+                    uncached_val = uncached_val.to('cpu')
+                    self._h2d_d2h_time = time.time() - start
+                    self._set(uncached_idx, uncached_val)
         else:
             start = time.time()
             idx, val = idx.to('cpu'), val.to('cpu')
