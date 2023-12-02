@@ -247,7 +247,7 @@ class DistTensor:
                 self._set(idx, val)
             else:
                 uncached_mask = ~cache_mask
-                uncached_idx = idx[uncached_mask]
+                uncached_idx = idx_gpu[uncached_mask]
                 uncached_val = val[uncached_mask]
                 if len(uncached_idx) > 0:
                     start = time.time()
