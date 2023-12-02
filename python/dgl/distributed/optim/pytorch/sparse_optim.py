@@ -657,6 +657,9 @@ class SparseAdam(DistSparseGradOptimizer):
             if gpu_cache is not None:
                 state_mem_gpu_cache = gpu_cache.clone(write_through=False)
                 state_power_gpu_cache = gpu_cache.clone(write_through=False)
+            else:
+                state_mem_gpu_cache = None
+                state_power_gpu_cache = None
 
             state_step = DistTensor(
                 (emb.num_embeddings,),
