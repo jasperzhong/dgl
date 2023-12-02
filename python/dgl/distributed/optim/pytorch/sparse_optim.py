@@ -769,14 +769,11 @@ class SparseAdam(DistSparseGradOptimizer):
         self._comp_time += time.time() - start
 
         start = time.time()
-        update_mem_dst = update_mem.to(state_dev, non_blocking=True)
-        update_power_dst = update_power.to(state_dev, non_blocking=True)
-        self._h2d_d2h_time += time.time() - start
+        state_mem[state_idx] = update_mem
+        state_power[state_idx] = update_power
+        self._push_time += time.time() - start - state_mem._h2d_d2h_time - state_power._h2d_d2h_time
+        self._h2d_d2h_time += state_mem._h2d_d2h_time + state_power._h2d_d2h_time
 
-        if state_block:
-            # use events to try and overlap CPU and GPU as much as possible
-            update_event = th.cuda.Event()
-            update_event.record()
 
         start = time.time()
         update_mem_corr = update_mem / (
@@ -806,27 +803,6 @@ class SparseAdam(DistSparseGradOptimizer):
         emb._tensor[state_idx] = emb_values
         self._push_time += time.time() - start - emb._tensor._h2d_d2h_time
         self._h2d_d2h_time += emb._tensor._h2d_d2h_time
-
-        start = time.time()
-        if state_block:
-            # std_event = th.cuda.Event()
-            # std_event.record()
-            # wait for our transfers from exec_dev to state_dev to finish
-            # before we can use them
-            update_event.wait()
-        self._h2d_d2h_time += time.time() - start
-
-        start = time.time()
-        state_mem[state_idx] = update_mem_dst
-        state_power[state_idx] = update_power_dst
-        self._push_time += time.time() - start
-
-        # start = time.time()
-        # if state_block:
-        #     # wait for the transfer of std_values to finish before we
-        #     # can use it
-        #     std_event.wait()
-        # self._h2d_d2h_time += time.time() - start
 
 
 
