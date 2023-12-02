@@ -636,7 +636,7 @@ class SparseAdam(DistSparseGradOptimizer):
         Default: 1e-8
     """
 
-    def __init__(self, params, lr, betas=(0.9, 0.999), eps=1e-08, gpu_caches=None):
+    def __init__(self, params, lr, betas=(0.9, 0.999), eps=1e-08):
         super(SparseAdam, self).__init__(params, lr)
         self._eps = eps
         # We need to register a state sum for each embedding in the kvstore.
@@ -653,9 +653,8 @@ class SparseAdam(DistSparseGradOptimizer):
             assert isinstance(
                 emb, DistEmbedding
             ), "SparseAdam only supports dgl.distributed.DistEmbedding"
-            gpu_cache = None
-            if gpu_caches is not None and emb.name in gpu_caches:
-                gpu_cache = gpu_caches[emb.name]
+            gpu_cache = emb.gpu_cache
+            if gpu_cache is not None:
                 state_mem_gpu_cache = gpu_cache.clone(write_through=False)
                 state_power_gpu_cache = gpu_cache.clone(write_through=False)
 
