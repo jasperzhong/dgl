@@ -56,16 +56,22 @@ class DistSparseGradOptimizer(abc.ABC):
         self._comp_time = 0
         self._tot_time = 0
 
+        print("Init optimizer")
+
         if th.distributed.is_initialized():
+            print("Init optimizer with dist")
             self._rank = th.distributed.get_rank()
             self._world_size = th.distributed.get_world_size()
             self._local_rank = int(os.environ["LOCAL_RANK"])
             self._local_world_size = int(os.environ["LOCAL_WORLD_SIZE"])
+            print(f"Rank {self._rank} local rank {self._local_rank} world size {self._world_size} local world size {self._local_world_size}")
         else:
             self._rank = 0
             self._world_size = 1
             self._local_rank = 0
             self._local_world_size = 1
+        
+        print("Init optimizer done")
 
     def local_state_dict(self):
         """Return the state pertaining to current rank of the optimizer.
